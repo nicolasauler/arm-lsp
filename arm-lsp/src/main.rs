@@ -1,58 +1,53 @@
-//! A minimal example LSP server that can only respond to the `gotoDefinition` request. To use
-//! this example, execute it and then send an `initialize` request.
-//!
-//! ```no_run
-//! Content-Length: 85
-//!
-//! {"jsonrpc": "2.0", "method": "initialize", "id": 1, "params": {"capabilities": {}}}
-//! ```
-//!
-//! This will respond with a server response. Then send it a `initialized` notification which will
-//! have no response.
-//!
-//! ```no_run
-//! Content-Length: 59
-//!
-//! {"jsonrpc": "2.0", "method": "initialized", "params": {}}
-//! ```
-//!
-//! Once these two are sent, then we enter the main loop of the server. The only request this
-//! example can handle is `gotoDefinition`:
-//!
-//! ```no_run
-//! Content-Length: 159
-//!
-//! {"jsonrpc": "2.0", "method": "textDocument/definition", "id": 2, "params": {"textDocument": {"uri": "file://temp"}, "position": {"line": 1, "character": 1}}}
-//! ```
-//!
-//! To finish up without errors, send a shutdown request:
-//!
-//! ```no_run
-//! Content-Length: 67
-//!
-//! {"jsonrpc": "2.0", "method": "shutdown", "id": 3, "params": null}
-//! ```
-//!
-//! The server will exit the main loop and finally we send a `shutdown` notification to stop
-//! the server.
-//!
-//! ```
-//! Content-Length: 54
-//!
-//! {"jsonrpc": "2.0", "method": "exit", "params": null}
-//! ```
 use std::error::Error;
+use std::fs::File;
+use std::io::BufRead;
 
-use lsp_types::OneOf;
+use lsp_types::request::{GotoDefinition, HoverRequest};
 use lsp_types::{
-    request::GotoDefinition, GotoDefinitionResponse, InitializeParams, ServerCapabilities,
+    GotoDefinitionResponse, Hover, HoverContents, HoverProviderCapability, InitializeParams,
+    MarkedString, OneOf, ServerCapabilities, TextDocumentPositionParams,
 };
 
 use lsp_server::{Connection, ExtractError, Message, Request, RequestId, Response};
 
+use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
+
+#[derive(Serialize, Deserialize, Debug)]
+struct Instruction {
+    id: String,
+    names: Vec<String>,
+    operation: Operation,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+struct Operation {
+    lines: Vec<String>,
+}
+
+fn populate_hashmap() -> Result<HashMap<String, Instruction>, Box<dyn Error + Sync + Send>> {
+    let file = std::fs::read_to_string("all.json")?;
+    let instructions: Vec<Instruction> = serde_json::from_str(&file)?;
+
+    let mut instructions_map = HashMap::new();
+    for instruction in instructions {
+        instructions_map.insert(instruction.names[0].clone(), instruction);
+    }
+
+    Ok(instructions_map)
+}
+
+fn get_instruction<'a>(
+    instructions_map: &'a HashMap<String, Instruction>,
+    instruction_name: &str,
+) -> Option<&'a Instruction> {
+    instructions_map.get(instruction_name)
+}
+
 fn main() -> Result<(), Box<dyn Error + Sync + Send>> {
-    // Note that  we must have our logging only write out to stderr.
     eprintln!("starting generic LSP server");
+
+    let instructions_map = populate_hashmap()?;
 
     // Create the transport. Includes the stdio (stdin and stdout) versions but this could
     // also be implemented to use sockets or HTTP.
@@ -60,15 +55,15 @@ fn main() -> Result<(), Box<dyn Error + Sync + Send>> {
 
     // Run the server and wait for the two threads to end (typically by trigger LSP Exit event).
     let server_capabilities = serde_json::to_value(&ServerCapabilities {
+        hover_provider: Some(HoverProviderCapability::Simple(true)),
         definition_provider: Some(OneOf::Left(true)),
         ..Default::default()
     })
     .unwrap();
     let initialization_params = connection.initialize(server_capabilities)?;
-    main_loop(connection, initialization_params)?;
+    main_loop(connection, initialization_params, &instructions_map)?;
     io_threads.join()?;
 
-    // Shut down gracefully.
     eprintln!("shutting down server");
     Ok(())
 }
@@ -76,6 +71,7 @@ fn main() -> Result<(), Box<dyn Error + Sync + Send>> {
 fn main_loop(
     connection: Connection,
     params: serde_json::Value,
+    instructions_map: &HashMap<String, Instruction>,
 ) -> Result<(), Box<dyn Error + Sync + Send>> {
     let _params: InitializeParams = serde_json::from_value(params).unwrap();
     eprintln!("starting example main loop");
@@ -87,19 +83,62 @@ fn main_loop(
                     return Ok(());
                 }
                 eprintln!("got request: {req:?}");
-                match cast::<GotoDefinition>(req) {
+                match cast::<GotoDefinition>(req.clone()) {
                     Ok((id, params)) => {
                         eprintln!("got gotoDefinition request #{id}: {params:?}");
-                        let result = Some(GotoDefinitionResponse::Array(Vec::new()));
+                        let lsp_types = lsp_types::Location::new(
+                            lsp_types::Url::parse("file:///home/nic/202302-poli/labproc/test_again/arm-lsp/src/whatever.rs").unwrap(),
+                            lsp_types::Range::new(
+                                lsp_types::Position::new(0, 0),
+                                lsp_types::Position::new(0, 0),
+                            ),
+                        );
+                        let result = Some(GotoDefinitionResponse::Array(vec![lsp_types]));
                         let result = serde_json::to_value(&result).unwrap();
-                        let resp = Response { id, result: Some(result), error: None };
+                        let resp = Response {
+                            id,
+                            result: Some(result),
+                            error: None,
+                        };
+                        eprintln!("sending response: {resp:?}");
                         connection.sender.send(Message::Response(resp))?;
                         continue;
                     }
                     Err(err @ ExtractError::JsonError { .. }) => panic!("{err:?}"),
                     Err(ExtractError::MethodMismatch(req)) => req,
                 };
-                // ...
+                match cast::<HoverRequest>(req) {
+                    Ok((id, params)) => {
+                        eprintln!("got hover request #{id}: {params:?}");
+
+                        let word_at_cursor =
+                            get_word_at_cursor_from_file(&params.text_document_position_params);
+                        eprintln!("word at cursor: {word_at_cursor}");
+
+                        let lsp_types = Hover {
+                            contents: HoverContents::Scalar(MarkedString::String(
+                                get_instruction(&instructions_map, &word_at_cursor)
+                                    .unwrap()
+                                    .operation
+                                    .lines
+                                    .join("\n"),
+                            )),
+                            range: None,
+                        };
+                        let result = Some(lsp_types);
+                        let result = serde_json::to_value(&result).unwrap();
+                        let resp = Response {
+                            id,
+                            result: Some(result),
+                            error: None,
+                        };
+                        eprintln!("sending response: {resp:?}");
+                        connection.sender.send(Message::Response(resp))?;
+                        continue;
+                    }
+                    Err(err @ ExtractError::JsonError { .. }) => panic!("{err:?}"),
+                    Err(ExtractError::MethodMismatch(req)) => req,
+                };
             }
             Message::Response(resp) => {
                 eprintln!("got response: {resp:?}");
@@ -110,6 +149,47 @@ fn main_loop(
         }
     }
     Ok(())
+}
+
+fn get_word_at_cursor_from_file(
+    text_document_position_params: &TextDocumentPositionParams,
+) -> String {
+    let uri = &text_document_position_params.text_document.uri;
+    let line = text_document_position_params.position.line as usize;
+    let col = text_document_position_params.position.character as usize;
+
+    let filepath = uri.to_file_path().unwrap();
+
+    let file = File::open(filepath).unwrap_or_else(|_| panic!("File not found: {:?}", uri));
+    let lines = std::io::BufReader::new(file);
+    let line_conts = lines.lines().nth(line).unwrap().unwrap();
+
+    let (start, end) = find_word_at_pos(&line_conts, col);
+    line_conts[start..end].to_string()
+}
+
+fn find_word_at_pos(line: &str, col: usize) -> (usize, usize) {
+    let line_ = format!("{} ", line);
+    let is_ident_char = |c: char| c.is_alphanumeric() || c == '_';
+
+    let start = line_
+        .chars()
+        .enumerate()
+        .take(col)
+        .filter(|&(_, c)| !is_ident_char(c))
+        .last()
+        .map(|(i, _)| i + 1)
+        .unwrap_or(0);
+
+    #[allow(clippy::filter_next)]
+    let mut end = line_
+        .chars()
+        .enumerate()
+        .skip(col)
+        .filter(|&(_, c)| !is_ident_char(c));
+
+    let end = end.next();
+    (start, end.map(|(i, _)| i).unwrap_or(col))
 }
 
 fn cast<R>(req: Request) -> Result<(RequestId, R::Params), ExtractError<Request>>
