@@ -1,0 +1,402 @@
+    {
+      "decode": {
+        "lines": []
+      },
+      "encodings": [
+        {
+          "bits": [
+            {
+              "name": "!=1111",
+              "size": 4,
+              "type": 4
+            },
+            {
+              "name": "0 0 1 0 1 0 0",
+              "size": 7,
+              "type": 5
+            },
+            {
+              "name": "S",
+              "size": 1,
+              "type": 3
+            },
+            {
+              "name": "Rn",
+              "size": 4,
+              "type": 1
+            },
+            {
+              "name": "Rd",
+              "size": 4,
+              "type": 1
+            },
+            {
+              "name": "imm12",
+              "size": 12,
+              "type": 2
+            }
+          ],
+          "decode": [
+            "if Rn == '1111' && S == '0' then SEE ADR;",
+            "if Rn == '1101' then SEE ADD (SP plus immediate);",
+            "d = UInt(Rd); n = UInt(Rn); setflags = (S == '1');              imm32 = A32ExpandImm(imm12);"
+          ],
+          "mask": "0x02800000",
+          "mnemonics": [
+            {
+              "constraint": " S = 0.",
+              "mnemonics": [
+                {
+                  "aliases": [],
+                  "value": "ADD{<c>}{<q>} {<Rd>,} <Rn>, #<const>"
+                }
+              ],
+              "name": "ADD variant"
+            },
+            {
+              "constraint": " S = 1.",
+              "mnemonics": [
+                {
+                  "aliases": [],
+                  "value": "ADDS{<c>}{<q>} {<Rd>,} <Rn>, #<const>"
+                }
+              ],
+              "name": "ADDS variant"
+            }
+          ],
+          "name": "A1",
+          "variant": "[Arm Bits32 Archetype (0x200000021)]"
+        },
+        {
+          "bits": [
+            {
+              "name": "0 0 0 1 1 1 0",
+              "size": 7,
+              "type": 5
+            },
+            {
+              "name": "imm3",
+              "size": 3,
+              "type": 2
+            },
+            {
+              "name": "Rn",
+              "size": 3,
+              "type": 1
+            },
+            {
+              "name": "Rd",
+              "size": 3,
+              "type": 1
+            }
+          ],
+          "decode": [
+            "d = UInt(Rd);       n = UInt(Rn);   setflags = !InITBlock();        imm32 = ZeroExtend(imm3, 32);"
+          ],
+          "mask": "0x00001c00",
+          "mnemonics": [
+            {
+              "constraint": "",
+              "mnemonics": [
+                {
+                  "aliases": [],
+                  "value": "ADD<c>{<q>} <Rd>, <Rn>, #<imm3>// Inside IT block"
+                },
+                {
+                  "aliases": [],
+                  "value": "ADDS{<q>} <Rd>, <Rn>, #<imm3>// Outside IT block"
+                }
+              ],
+              "name": "T1 variant"
+            }
+          ],
+          "name": "T1",
+          "variant": "[Thumb Bits16 Archetype (0x200000012)]"
+        },
+        {
+          "bits": [
+            {
+              "name": "0 0 1 1 0",
+              "size": 5,
+              "type": 5
+            },
+            {
+              "name": "Rdn",
+              "size": 3,
+              "type": 1
+            },
+            {
+              "name": "imm8",
+              "size": 8,
+              "type": 2
+            }
+          ],
+          "decode": [
+            "d = UInt(Rdn);    n = UInt(Rdn);    setflags = !InITBlock();         imm32 = ZeroExtend(imm8, 32);"
+          ],
+          "mask": "0x00003000",
+          "mnemonics": [
+            {
+              "constraint": "",
+              "mnemonics": [
+                {
+                  "aliases": [],
+                  "value": "ADD<c>{<q>} <Rdn>, #<imm8>// Inside IT block, and <Rdn>, <imm8> can be represented in T1"
+                },
+                {
+                  "aliases": [],
+                  "value": "ADD<c>{<q>} {<Rdn>,} <Rdn>, #<imm8>// Inside IT block, and <Rdn>, <imm8> cannot be represented in T1"
+                },
+                {
+                  "aliases": [],
+                  "value": "ADDS{<q>} <Rdn>, #<imm8>// Outside IT block, and <Rdn>, <imm8> can be represented in T1"
+                },
+                {
+                  "aliases": [],
+                  "value": "ADDS{<q>} {<Rdn>,} <Rdn>, #<imm8>// Outside IT block, and <Rdn>, <imm8> cannot be represented in T1"
+                }
+              ],
+              "name": "T2 variant"
+            }
+          ],
+          "name": "T2",
+          "variant": "[Thumb Bits16 Archetype (0x200000012)]"
+        },
+        {
+          "bits": [
+            {
+              "name": "1 1 1 1 0",
+              "size": 5,
+              "type": 5
+            },
+            {
+              "name": "i",
+              "size": 1,
+              "type": 2
+            },
+            {
+              "name": "0 1 0 0 0",
+              "size": 5,
+              "type": 5
+            },
+            {
+              "name": "S",
+              "size": 1,
+              "type": 3
+            },
+            {
+              "name": "!=1101",
+              "size": 4,
+              "type": 4
+            },
+            {
+              "name": "0",
+              "size": 1,
+              "type": 5
+            },
+            {
+              "name": "imm3",
+              "size": 3,
+              "type": 2
+            },
+            {
+              "name": "Rd",
+              "size": 4,
+              "type": 1
+            },
+            {
+              "name": "imm8",
+              "size": 8,
+              "type": 2
+            }
+          ],
+          "decode": [
+            "if Rd == '1111' && S == '1' then SEE CMN (immediate);",
+            "if Rn == '1101' then SEE ADD (SP plus immediate);",
+            "d = UInt(Rd); n = UInt(Rn); setflags = (S == '1'); imm32 = T32ExpandImm(i:imm3:imm8);",
+            "if (d == 15 && !setflags) || n == 15 then UNPREDICTABLE; // ARMv8-A removes UNPREDICTABLE for R13"
+          ],
+          "mask": "0xf1000000",
+          "mnemonics": [
+            {
+              "constraint": " S = 0.",
+              "mnemonics": [
+                {
+                  "aliases": [],
+                  "value": "ADD<c>.W {<Rd>,} <Rn>, #<const>// Inside IT block, and <Rd>, <Rn>, <const> can be represented in T1 or T2"
+                },
+                {
+                  "aliases": [],
+                  "value": "ADD{<c>}{<q>} {<Rd>,} <Rn>, #<const>"
+                }
+              ],
+              "name": "ADD variant"
+            },
+            {
+              "constraint": " S = 1 && Rd != 1111.",
+              "mnemonics": [
+                {
+                  "aliases": [],
+                  "value": "ADDS.W {<Rd>,} <Rn>, #<const>// Outside IT block, and <Rd>, <Rn>, <const> can be represented in T1 or T2"
+                },
+                {
+                  "aliases": [],
+                  "value": "ADDS{<c>}{<q>} {<Rd>,} <Rn>, #<const>"
+                }
+              ],
+              "name": "ADDS variant"
+            }
+          ],
+          "name": "T3",
+          "variant": "[Thumb Bits32 Archetype (0x200000022)]"
+        },
+        {
+          "bits": [
+            {
+              "name": "1 1 1 1 0",
+              "size": 5,
+              "type": 5
+            },
+            {
+              "name": "i",
+              "size": 1,
+              "type": 2
+            },
+            {
+              "name": "1 0 0 0 0 0",
+              "size": 6,
+              "type": 5
+            },
+            {
+              "name": "!=11x1",
+              "size": 4,
+              "type": 4
+            },
+            {
+              "name": "0",
+              "size": 1,
+              "type": 5
+            },
+            {
+              "name": "imm3",
+              "size": 3,
+              "type": 2
+            },
+            {
+              "name": "Rd",
+              "size": 4,
+              "type": 1
+            },
+            {
+              "name": "imm8",
+              "size": 8,
+              "type": 2
+            }
+          ],
+          "decode": [
+            "if Rn == '1111' then SEE ADR;",
+            "if Rn == '1101' then SEE ADD (SP plus immediate);",
+            "d = UInt(Rd); n = UInt(Rn); setflags = FALSE; imm32 = ZeroExtend(i:imm3:imm8, 32);",
+            "if d == 15 then UNPREDICTABLE;   // ARMv8-A removes UNPREDICTABLE for R13"
+          ],
+          "mask": "0xf2000000",
+          "mnemonics": [
+            {
+              "constraint": "",
+              "mnemonics": [
+                {
+                  "aliases": [],
+                  "value": "ADD{<c>}{<q>} {<Rd>,} <Rn>, #<imm12>// <imm12> cannot be represented in T1, T2, or T3"
+                },
+                {
+                  "aliases": [],
+                  "value": "ADDW{<c>}{<q>} {<Rd>,} <Rn>, #<imm12>// <imm12> can be represented in T1, T2, or T3"
+                }
+              ],
+              "name": "T4 variant"
+            }
+          ],
+          "name": "T4",
+          "variant": "[Thumb Bits32 Archetype (0x200000022)]"
+        }
+      ],
+      "id": "4",
+      "names": [
+        "ADD",
+        "ADDS (immediate)"
+      ],
+      "operation": {
+        "lines": [
+          "if CurrentInstrSet() == InstrSet_A32 then",
+          "    if ConditionPassed() then",
+          "        EncodingSpecificOperations();",
+          "        (result, nzcv) = AddWithCarry(R[n], imm32, '0');",
+          "        if d == 15 then          // Can only occur for A32 encoding",
+          "            if setflags then",
+          "                ALUExceptionReturn(result);",
+          "            else",
+          "                      ALUWritePC(result);",
+          "              else",
+          "                  R[d] = result;",
+          "                  if setflags then",
+          "                      PSTATE.<N,Z,C,V> = nzcv;",
+          "     else",
+          "         if ConditionPassed() then",
+          "             EncodingSpecificOperations();",
+          "             (result, nzcv) = AddWithCarry(R[n], imm32, '0');",
+          "             R[d] = result;",
+          "             if setflags then",
+          "                 PSTATE.<N,Z,C,V> = nzcv;"
+        ]
+      },
+      "summary": {
+        "lines": [
+          "Add (immediate) adds an immediate value to a register value, and writes the result to the destination register.",
+          "If the destination register is not the PC, the ADDS variant of the instruction updates the condition flags based on the",
+          "result.",
+          "The field descriptions for <Rd> identify the encodings where the PC is permitted as the destination register. If the",
+          "destination register is the PC:",
+          "          The ADD variant of the instruction is an interworking branch, see Pseudocode description of operations on",
+          "the AArch32 general-purpose registers and the PC on page E1-2378.",
+          "          The ADDS variant of the instruction performs an exception return without the use of the stack. ARM",
+          "deprecates use of this instruction. However, in this case:",
+          "        The PE branches to the address written to the PC, and restores PSTATE from SPSR_<current_mode>.",
+          "        The PE checks SPSR_<current_mode> for an illegal return event. See Illegal return events from",
+          "AArch32 state on page G1-3845.",
+          "        The instruction is UNDEFINED in Hyp mode.",
+          "        The instruction is CONSTRAINED UNPREDICTABLE in User mode and System mode."
+        ]
+      },
+      "symbols": {
+        "lines": [
+          "<c>            See Standard assembler syntax fields on page F2-2506.",
+          "<q>            See Standard assembler syntax fields on page F2-2506.",
+          "<Rdn>          Is the general-purpose source and destination register, encoded in the \"Rdn\" field.",
+          "<imm8>         Is a 8-bit unsigned immediate, in the range 0 to 255, encoded in the \"imm8\" field.",
+          "<Rd>           For encoding A1: is the general-purpose destination register, encoded in the \"Rd\" field. If omitted,",
+          "               this register is the same as <Rn>. If the PC is used:",
+          "                      For the ADD variant, the instruction is a branch to the address calculated by the operation.",
+          "                       This is an interworking branch, see Pseudocode description of operations on the AArch32",
+          "                       general-purpose registers and the PC on page E1-2378.",
+          "                      For the ADDS variant, the instruction performs an exception return, that restores PSTATE",
+          "                       from SPSR_<current_mode>. ARM deprecates use of this instruction.",
+          "               For encoding T1, T3 and T4: is the general-purpose destination register, encoded in the \"Rd\" field.",
+          "               If omitted, this register is the same as <Rn>.",
+          "<Rn>           For encoding A1 and T4: is the general-purpose source register, encoded in the \"Rn\" field. If the SP",
+          "               is used, see ADD, ADDS (SP plus immediate). If the PC is used, see ADR.",
+          "               For encoding T1: is the general-purpose source register, encoded in the \"Rn\" field.",
+          "               For encoding T3: is the general-purpose source register, encoded in the \"Rn\" field. If the SP is used,",
+          "               see ADD, ADDS (SP plus immediate).",
+          "<imm3>         Is a 3-bit unsigned immediate, in the range 0 to 7, encoded in the \"imm3\" field.",
+          "<imm12>        Is a 12-bit unsigned immediate, in the range 0 to 4095, encoded in the \"i:imm3:imm8\" field.",
+          "<const>        For encoding A1: an immediate value. See Modified immediate constants in A32 instructions on",
+          "               page F4-2559 for the range of values.",
+          "               For encoding T3: an immediate value. See Modified immediate constants in T32 instructions on",
+          "               page F3-2530 for the range of values.",
+          "When multiple encodings of the same length are available for an instruction, encoding T3 is preferred to encoding",
+          "T4 (if encoding T4 is required, use the ADDW syntax). Encoding T1 is preferred to encoding T2 if <Rd> is specified",
+          "and encoding T2 is preferred to encoding T1 if <Rd> is omitted."
+        ]
+      }
+    },
+

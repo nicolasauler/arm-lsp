@@ -18,10 +18,22 @@ struct Instruction {
     id: String,
     names: Vec<String>,
     operation: Operation,
+    symbols: Symbols,
+    summary: Summary,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
 struct Operation {
+    lines: Vec<String>,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+struct Symbols {
+    lines: Vec<String>,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+struct Summary {
     lines: Vec<String>,
 }
 
@@ -117,11 +129,24 @@ fn main_loop(
 
                         let lsp_types = Hover {
                             contents: HoverContents::Scalar(MarkedString::String(
+                                // print operation, summary and symbols
                                 get_instruction(&instructions_map, &word_at_cursor)
                                     .unwrap()
                                     .operation
                                     .lines
-                                    .join("\n"),
+                                    .join("\n")
+                                    + "\n\n"
+                                    + &get_instruction(&instructions_map, &word_at_cursor)
+                                        .unwrap()
+                                        .summary
+                                        .lines
+                                        .join("\n")
+                                    + "\n\n"
+                                    + &get_instruction(&instructions_map, &word_at_cursor)
+                                        .unwrap()
+                                        .symbols
+                                        .lines
+                                        .join("\n"),
                             )),
                             range: None,
                         };
