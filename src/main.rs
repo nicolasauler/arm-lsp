@@ -4,8 +4,8 @@ use std::io::BufRead;
 
 use lsp_types::request::{GotoDefinition, HoverRequest};
 use lsp_types::{
-    GotoDefinitionResponse, Hover, HoverContents, HoverProviderCapability, InitializeParams,
-    MarkedString, OneOf, ServerCapabilities, TextDocumentPositionParams,
+    Hover, HoverContents, HoverProviderCapability, InitializeParams, Location, MarkedString, OneOf,
+    Position, Range, ServerCapabilities, TextDocumentPositionParams,
 };
 
 use lsp_server::{Connection, ExtractError, Message, Request, RequestId, Response};
@@ -98,14 +98,8 @@ fn main_loop(
                 match cast::<GotoDefinition>(req.clone()) {
                     Ok((id, params)) => {
                         eprintln!("got gotoDefinition request #{id}: {params:?}");
-                        let lsp_types = lsp_types::Location::new(
-                            lsp_types::Url::parse("file:///home/nic/202302-poli/labproc/test_again/arm-lsp/src/whatever.rs").unwrap(),
-                            lsp_types::Range::new(
-                                lsp_types::Position::new(0, 0),
-                                lsp_types::Position::new(0, 0),
-                            ),
-                        );
-                        let result = Some(GotoDefinitionResponse::Array(vec![lsp_types]));
+                        let result =
+                            text_document_definition(&params.text_document_position_params);
                         let result = serde_json::to_value(&result).unwrap();
                         let resp = Response {
                             id,
@@ -174,6 +168,14 @@ fn main_loop(
         }
     }
     Ok(())
+}
+
+// implement go to definition for the language server
+// based on current source position, find the word at the cursor
+// then find definition and return its position
+fn text_document_definition(
+    text_document_position_params: &TextDocumentPositionParams,
+) -> Option<Location> {
 }
 
 fn get_word_at_cursor_from_file(
