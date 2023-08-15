@@ -2,6 +2,7 @@ vim.lsp.start({
     name = 'arm-lsp',
     cmd = { './target/debug/arm-lsp' },
     root_dir = vim.fs.dirname(vim.fs.find({ 'Cargo.toml' }, { upward = true })[1]),
+    -- filetypes = { 'asm', 's' },
 })
 
 vim.api.nvim_create_autocmd('LspAttach', {
