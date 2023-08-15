@@ -5,7 +5,7 @@ use std::io::BufRead;
 use lsp_types::request::{GotoDefinition, HoverRequest};
 use lsp_types::{
     Hover, HoverContents, HoverProviderCapability, InitializeParams, Location, MarkedString, OneOf,
-    Position, Range, ServerCapabilities, TextDocumentPositionParams,
+    Position, Range, ServerCapabilities, TextDocumentPositionParams, Url,
 };
 
 use lsp_server::{Connection, ExtractError, Message, Request, RequestId, Response};
@@ -98,14 +98,22 @@ fn main_loop(
                 match cast::<GotoDefinition>(req.clone()) {
                     Ok((id, params)) => {
                         eprintln!("got gotoDefinition request #{id}: {params:?}");
-                        let result =
-                            text_document_definition(&params.text_document_position_params);
-                        let result = serde_json::to_value(&result).unwrap();
-                        let resp = Response {
-                            id,
-                            result: Some(result),
-                            error: None,
-                        };
+                        let resp =
+                            match text_document_definition(&params.text_document_position_params) {
+                                Some(result) => {
+                                    let result = serde_json::to_value(&result).unwrap();
+                                    Response {
+                                        id,
+                                        result: Some(result),
+                                        error: None,
+                                    }
+                                }
+                                None => Response {
+                                    id,
+                                    result: None,
+                                    error: None,
+                                },
+                            };
                         eprintln!("sending response: {resp:?}");
                         connection.sender.send(Message::Response(resp))?;
                         continue;
@@ -173,9 +181,87 @@ fn main_loop(
 // implement go to definition for the language server
 // based on current source position, find the word at the cursor
 // then find definition and return its position
+//
+// example file to test: test.asm
+// contents:
+// L0: mov ax, 0x1234
+//     mov bx, 0x5678
+//     bnz L0
+//
+// if you send a go to definition on L0 in "bnz L0", it should go to the first line
 fn text_document_definition(
     text_document_position_params: &TextDocumentPositionParams,
 ) -> Option<Location> {
+    // get source
+    let source = get_source_from_file(&text_document_position_params.text_document.uri);
+
+    // generate symbol table
+    let symbol_table = generate_symbol_map(&source, &text_document_position_params);
+    eprintln!("symbol table: {:#?}", symbol_table);
+
+    let word_at_cursor = get_word_at_cursor_from_file(&text_document_position_params);
+
+    // return the location of the definition of the word at the cursor
+    // which corresponds to the occurrence of the word followed by a colon
+    // in the source file
+
+    let definition = match word_at_cursor.strip_suffix(":") {
+        Some(def) => def.to_string(),
+        None => word_at_cursor,
+    };
+
+    // add suffix back so the definition can be searched in the symbol table
+    let definition = definition.to_string() + ":";
+    eprintln!("definition: {:#?}", definition);
+
+    symbol_table.get(&definition).cloned().or_else(|| {
+        // if the definition is not found, return the location it was at anyway
+        Some(Location {
+            uri: text_document_position_params.text_document.uri.clone(),
+            range: Range {
+                start: text_document_position_params.position,
+                end: text_document_position_params.position,
+            },
+        })
+    })
+}
+
+// parses a source file and generates a symbol table
+// that maps symbols to their locations
+fn generate_symbol_map(
+    source: &str,
+    text_document_position_params: &TextDocumentPositionParams,
+) -> HashMap<String, Location> {
+    let mut symbols = HashMap::new();
+    for (i, line) in source.lines().enumerate() {
+        let mut words = line.split_whitespace();
+        if let Some(word) = words.next() {
+            symbols.insert(
+                word.to_string(),
+                Location {
+                    uri: Url::from_file_path(uri_to_path(
+                        &text_document_position_params.text_document.uri,
+                    ))
+                    .unwrap(),
+                    range: Range {
+                        start: Position {
+                            line: i as u32,
+                            character: 0,
+                        },
+                        end: Position {
+                            line: i as u32,
+                            character: word.len() as u32,
+                        },
+                    },
+                },
+            );
+        }
+    }
+    symbols
+}
+
+fn uri_to_path(uri: &Url) -> String {
+    uri.to_file_path().unwrap().to_str().unwrap().to_string()
 }
 
 fn get_word_at_cursor_from_file(
@@ -217,6 +303,18 @@ fn find_word_at_pos(line: &str, col: usize) -> (usize, usize) {
 
     let end = end.next();
     (start, end.map(|(i, _)| i).unwrap_or(col))
+}
+
+fn get_source_from_file(uri: &Url) -> String {
+    let filepath = uri.to_file_path().unwrap();
+
+    let file = File::open(filepath).unwrap_or_else(|_| panic!("File not found: {:?}", uri));
+    let lines = std::io::BufReader::new(file);
+    lines
+        .lines()
+        .map(|l| l.unwrap())
+        .collect::<Vec<String>>()
+        .join("\n")
 }
 
 fn cast<R>(req: Request) -> Result<(RequestId, R::Params), ExtractError<Request>>

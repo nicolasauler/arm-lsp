@@ -1,4 +1,3 @@
-MOV r0, #0
-ADD r0, r0, r1
-MOV r1, #1
-ADD r0, r0, r1
+L0: mov ax, 0x1234
+    mov bx, 0x5678
+    bnz L0
