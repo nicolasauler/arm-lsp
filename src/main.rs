@@ -37,22 +37,33 @@ struct Summary {
     lines: Vec<String>,
 }
 
-fn populate_hashmap() -> Result<HashMap<String, Instruction>, Box<dyn Error + Sync + Send>> {
+fn populate_hashmap() -> Result<HashMap<String, Vec<Instruction>>, Box<dyn Error + Sync + Send>> {
     let file = std::fs::read_to_string("all.json")?;
     let instructions: Vec<Instruction> = serde_json::from_str(&file)?;
 
-    let mut instructions_map = HashMap::new();
+    let mut instructions_map: HashMap<String, Vec<Instruction>> = HashMap::new();
     for instruction in instructions {
-        instructions_map.insert(instruction.names[0].clone(), instruction);
+        // if instruction name is already in hashmap, append the new instruction to the existing one in the list
+        match instructions_map.get_mut(&instruction.names[0].clone().to_uppercase()) {
+            Some(existing_instruction) => {
+                existing_instruction.push(instruction);
+            }
+            None => {
+                instructions_map.insert(
+                    instruction.names[0].clone().to_uppercase(),
+                    vec![instruction],
+                );
+            }
+        }
     }
 
     Ok(instructions_map)
 }
 
-fn get_instruction<'a>(
-    instructions_map: &'a HashMap<String, Instruction>,
+fn get_instructions<'a>(
+    instructions_map: &'a HashMap<String, Vec<Instruction>>,
     instruction_name: &str,
-) -> Option<&'a Instruction> {
+) -> Option<&'a Vec<Instruction>> {
     instructions_map.get(instruction_name)
 }
 
@@ -83,7 +94,7 @@ fn main() -> Result<(), Box<dyn Error + Sync + Send>> {
 fn main_loop(
     connection: Connection,
     params: serde_json::Value,
-    instructions_map: &HashMap<String, Instruction>,
+    instructions_map: &HashMap<String, Vec<Instruction>>,
 ) -> Result<(), Box<dyn Error + Sync + Send>> {
     let _params: InitializeParams = serde_json::from_value(params).unwrap();
     eprintln!("starting example main loop");
@@ -127,28 +138,26 @@ fn main_loop(
 
                         let word_at_cursor =
                             get_word_at_cursor_from_file(&params.text_document_position_params);
+                        let word_at_cursor = word_at_cursor.to_uppercase();
                         eprintln!("word at cursor: {word_at_cursor}");
 
                         let lsp_types = Hover {
                             contents: HoverContents::Scalar(MarkedString::String(
-                                // print operation, summary and symbols
-                                get_instruction(&instructions_map, &word_at_cursor)
+                                // print operation, summary and symbols for each instruction in the
+                                // vector of instructions returned by get_instructions
+                                get_instructions(&instructions_map, &word_at_cursor)
                                     .unwrap()
-                                    .operation
-                                    .lines
-                                    .join("\n")
-                                    + "\n\n"
-                                    + &get_instruction(&instructions_map, &word_at_cursor)
-                                        .unwrap()
-                                        .summary
-                                        .lines
-                                        .join("\n")
-                                    + "\n\n"
-                                    + &get_instruction(&instructions_map, &word_at_cursor)
-                                        .unwrap()
-                                        .symbols
-                                        .lines
-                                        .join("\n"),
+                                    .iter()
+                                    .map(|instruction| {
+                                        instruction.operation.lines.join("\n")
+                                            + "\n\n"
+                                            + &instruction.summary.lines.join("\n")
+                                            + "\n\n"
+                                            + &instruction.symbols.lines.join("\n")
+                                            + "\n\n"
+                                    })
+                                    .collect::<Vec<String>>()
+                                    .join("\n\n"),
                             )),
                             range: None,
                         };
@@ -200,6 +209,7 @@ fn text_document_definition(
     eprintln!("symbol table: {:#?}", symbol_table);
 
     let word_at_cursor = get_word_at_cursor_from_file(&text_document_position_params);
+    let word_at_cursor = word_at_cursor.to_uppercase();
 
     // return the location of the definition of the word at the cursor
     // which corresponds to the occurrence of the word followed by a colon

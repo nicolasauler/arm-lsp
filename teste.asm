@@ -2,7 +2,7 @@ L2: MOV ax, 0x1234
     MOV bx, 0x5678
     BNE L1
 
-L3: MOV ax, 0x1234
+L3: mov ax, 0x1234
     MOV bx, 0x5678
     BNZ L4
 
