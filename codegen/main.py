@@ -235,7 +235,7 @@ def main():
         for line in f:
             yacc.parse(line)
 
-    print(f" register mapping: {name_to_register}a")
+    print(f" register mapping: {name_to_register}")
     print("".join(ASM))
 
     output_file = "output.s"
