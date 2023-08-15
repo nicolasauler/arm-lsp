@@ -145,19 +145,22 @@ fn main_loop(
                             contents: HoverContents::Scalar(MarkedString::String(
                                 // print operation, summary and symbols for each instruction in the
                                 // vector of instructions returned by get_instructions
-                                get_instructions(&instructions_map, &word_at_cursor)
-                                    .unwrap()
-                                    .iter()
-                                    .map(|instruction| {
-                                        instruction.operation.lines.join("\n")
-                                            + "\n\n"
-                                            + &instruction.summary.lines.join("\n")
-                                            + "\n\n"
-                                            + &instruction.symbols.lines.join("\n")
-                                            + "\n\n"
-                                    })
-                                    .collect::<Vec<String>>()
-                                    .join("\n\n"),
+                                match get_instructions(&instructions_map, &word_at_cursor) {
+                                    Some(vec) => vec
+                                        .iter()
+                                        .map(|instruction| {
+                                            instruction.operation.lines.join("\n")
+                                                + "\n\n"
+                                                + &instruction.summary.lines.join("\n")
+                                                + "\n\n"
+                                                + &instruction.symbols.lines.join("\n")
+                                                + "\n\n"
+                                        })
+                                        .collect::<Vec<String>>()
+                                        .join("\n\n"),
+                                    None => "Not an instruction\nor\nNo information available"
+                                        .to_string(),
+                                },
                             )),
                             range: None,
                         };
