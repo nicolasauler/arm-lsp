@@ -1,1 +1,6 @@
 /target
+.ds_store
+parser.out
+parsetab.py
+output.s
+*.pyc

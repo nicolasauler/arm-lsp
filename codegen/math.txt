@@ -1,0 +1,8 @@
+a=8
+b=3
+c=4
+d=3
+g=a+(b+c)
+if (a < b) then f=50 else f=30
+z = 99
+z > g ? f=5 : f=15
